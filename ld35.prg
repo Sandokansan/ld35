@@ -5,10 +5,15 @@ PROGRAM ld35;
 CONST
     TILE_WIDTH = 32;
     TILE_HEIGHT = 32;
-    LEVEL_WIDTH = 10;
-    LEVEL_HEIGHT = 10;
+    LEVEL_WIDTH = 40;
+    LEVEL_HEIGHT = 40;
 
-    TILE_KIND_NORMAL = 1;
+    SCREEN_WIDTH = 320;
+    SCREEN_HEIGHT = 240;
+
+    TILE_KIND_NONE = 0;
+    TILE_KIND_NORMAL = 120;
+    TILE_KIND_OTHER = 2;
     HEROES_MAX = 2;
     PLAYERS_MAX = 2;
 GLOBAL
@@ -40,7 +45,13 @@ GLOBAL
     end
 BEGIN
 
-    load_level();
+    set_fps(60,0);
+
+    write(0,0,0,0,m320x240);
+
+    splash();
+
+    load_level("1.lvl");
 
     repeat
         frame;
@@ -49,24 +60,103 @@ BEGIN
     unload_level();
 END
 
-Function load_level()
+Function splash()
+Private
+    idx;
+    sg[3];
+    sgs;
+    t;
+    fade_speed;
+Begin
+
+    fade_speed = 2;
+
+    z = 1;
+    x = SCREEN_WIDTH / 2;
+    y = SCREEN_HEIGHT / 2;
+
+    sg[sgs++] = new_map(200,200,100,100,100);
+    fade(0,0,0,fade_speed);
+
+    unsetz_on_any_key(id);
+
+    while(idx<sgs && z)
+        graph = sg[idx];
+        fade(100,100,100,fade_speed);
+        while(fading&&z) frame; end
+        t = timer+200;
+        while(timer<t && z) frame; end
+        fade(0,0,0,fade_speed);
+        while(fading) frame; end
+        idx++;
+    end
+
+    fade(100,100,100,fade_speed);
+
+End
+
+Process unsetz_on_any_key(pid)
+Begin
+    repeat
+        frame;
+    until(ascii>0)
+    pid.z = 0;
+End
+
+Function get_tile_kind(chr)
+Begin
+    switch(chr)
+    case char("x"):
+        return(TILE_KIND_NORMAL);
+    end
+    default:
+        return(TILE_KIND_NONE);
+    end
+    end
+End
+
+Function load_level(string s)
 Private
     fg;
     bg;
     block;
+    lvlfile;
+    chr;
+    kind;
+    filesize = 0;
 Begin
     leveldata.fpg = 0;
 
     leveldata.loadedmap[0] = new_map(TILE_WIDTH, TILE_HEIGHT, 0, 0, 100);
     leveldata.loadedmap[1] = write_in_map(0, "FG", 0); //new_map(TILE_WIDTH, TILE_HEIGHT, 0, 0, 120);
-    leveldata.loadedmap[2] = new_map(TILE_WIDTH, TILE_HEIGHT, 0, 0, 140);
+    leveldata.loadedmap[2] = new_map(TILE_WIDTH, TILE_HEIGHT, 0, 0, 55);
     leveldata.loadedmaps = 3;
 
-    for(x=0; x<LEVEL_WIDTH; x++)
-        for(y=0; y<LEVEL_HEIGHT; y++)
-            leveldata.tiles[x+LEVEL_WIDTH*y].pid = tile(x, y, TILE_KIND_NORMAL);
-        end
+
+    lvlfile = fopen("/home/bergfi/development/ld35/1.lvl", "r");
+
+    x = 0;
+    y = 0;
+    unit_size = 1;
+    filesize = filelength(lvlfile);
+
+    while(ftell(lvlfile) < filesize)
+       fread(&chr, 1, lvlfile);
+
+       if(chr == 10) y++; x = 0; continue; end
+
+       kind = get_tile_kind(chr);
+       leveldata.tiles[x+LEVEL_WIDTH*y].pid = tile(x, y, kind);
+
+       x++;
     end
+
+
+    //for(x=0; x<LEVEL_WIDTH; x++)
+    //    for(y=0; y<LEVEL_HEIGHT; y++)
+    //        leveldata.tiles[x+LEVEL_WIDTH*y].pid = tile(x, y, TILE_KIND_NORMAL);
+    //    end
+    //end
 
     herodata[0].pid = hero(0);
     herodata[1].pid = hero(1);
@@ -135,11 +225,14 @@ End
 
 Process tile(tx, ty, kind)
 Begin
+
+    if(kind == TILE_KIND_NONE) return; end
+
     ctype = C_SCROLL;
     x = TILE_WIDTH*tx;
     y = TILE_HEIGHT*ty;
 
-    graph = write_in_map(0,"tile", 0);
+    graph = write_in_map(0,"t:" + kind, 0);
 
     Loop
         frame;
