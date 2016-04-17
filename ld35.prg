@@ -15,6 +15,7 @@ CONST
     SCREEN_HEIGHT = 960;
 
     TILE_KIND_NONE = 0;     // other
+    TILE_KIND_COG = 111;    // 'o'
     TILE_KIND_NORMAL = 120; // 'x'
     TILE_KIND_HERO1 = 49;   // '1'
     TILE_KIND_HERO2 = 50;   // '2'
@@ -26,11 +27,13 @@ CONST
     PCX_COGSY_IDLE = 4;
     PCX_COGSY_WALK = 5;
     PCX_TRIGSY_IDLE = 6;
+    TILE_GRAPH_COG = 7;
+    PCX_FAGSY_IDLE = 8;
 
     // Sprite sheet ids
     SPR_COGSY_WALK = 0;
 
-    HEROES_MAX = 3;
+    HEROES_MAX = 4;
     PLAYERS_MAX = 2;
 
     // Anim related
@@ -42,6 +45,7 @@ CONST
     HERO_BOXSY = 0;    // I see they're been called 1 and 2 but my memory be hazy so names D:
     HERO_COGSY = 1;
     HERO_TRIGSY= 2;
+    HERO_FAGSY = 3;
 GLOBAL
     struct leveldata
         fpg;
@@ -74,7 +78,7 @@ GLOBAL
     end
     heroes;
     struct herodata[HEROES_MAX]
-        claimed = 0;
+        claimed = 0;  // I presume this is for claimed by a player, as opposed to being in use, hence the tape.
         pid;
         // Graphics related
         action;
@@ -85,6 +89,9 @@ GLOBAL
         walk_mom;
         walk_acc;
         walk_deacc;
+        // TAPE LOLOLOLO WTH NVM
+        shapeshift_to = -1;
+        in_use = 0;
     end
     players;
     struct playerdata[PLAYERS_MAX]
@@ -229,6 +236,8 @@ Begin
     herodata[idx].walk_max_speed = walk_speed;
     herodata[idx].walk_acc = walk_acc;
     herodata[idx].walk_deacc = walk_deacc;
+
+    herodata[idx].action = ACT_IDLE;
 End
 
 Function load_level(string s)
@@ -253,21 +262,32 @@ Begin
     lvl_load_pcx(PCX_COGSY_IDLE, "cogsy.map");
     lvl_load_pcx(PCX_COGSY_WALK, "cogsy_walk.pcx");
     lvl_load_pcx(PCX_TRIGSY_IDLE, "trigsy.map");
+    lvl_load_pcx(TILE_GRAPH_COG, "cog.pcx");
+    lvl_load_pcx(PCX_FAGSY_IDLE, "fagsy.map");
 
     extract_spr_sheet(PCX_COGSY_WALK, SPR_COGSY_WALK, 9);
 
     init_hero_graphics(HERO_BOXSY, PCX_BOXSY_IDLE, SPR_COGSY_WALK);         // INCORRECT WALK
     init_hero_graphics(HERO_COGSY, PCX_COGSY_IDLE, SPR_COGSY_WALK);
     init_hero_graphics(HERO_TRIGSY, PCX_TRIGSY_IDLE, SPR_COGSY_WALK);
+    init_hero_graphics(HERO_FAGSY, PCX_FAGSY_IDLE, SPR_COGSY_WALK);
 
-    init_hero_vars(HERO_BOXSY, 8, 25, 90);
+    init_hero_vars(HERO_BOXSY, 8, 125, 300);
     init_hero_vars(HERO_COGSY, 8, 250, 500);
     init_hero_vars(HERO_TRIGSY, 8, 250, 500);
+    init_hero_vars(HERO_FAGSY, 10, 200, 400);
 
     herodata[0].pid = hero(HERO_BOXSY);
     herodata[1].pid = hero(HERO_COGSY);
-    //herodata[2].pid = hero(HERO_TRIGSY);
     heroes = 2;
+
+//    herodata[2].pid = hero(HERO_TRIGSY);
+
+    lvlfile = fopen(s, "r");
+
+    if( lvlfile == 0 )
+        s = "prg/ld35/" + s;
+    end
 
     lvlfile = fopen(s, "r");
 
@@ -303,6 +323,9 @@ Begin
         case TILE_KIND_HERO2:
             herodata[1].pid.x = x*TILE_WIDTH + TILE_WIDTH/2;
             herodata[1].pid.y = y*TILE_HEIGHT + TILE_HEIGHT/2;
+        end
+        case TILE_KIND_COG:
+            Cog(lvl_pcx(TILE_GRAPH_COG), x, y);
         end
         default:
             leveldata.tiles[x+MAX_LEVEL_WIDTH*y].pid = tile(x, y, kind);
@@ -375,7 +398,7 @@ End
 Process player(idx)
 Private
     heroidx = 0;
-    k_n;
+    k_n, k_m;
     heroid;
 Begin
 
@@ -386,7 +409,9 @@ Begin
 
     herodata[heroidx].claimed = true;
     heroid = herodata[heroidx].pid;
+
     Loop
+        // Next hero
         if(key(_n))
             if(!k_n)
                 k_n = 1;
@@ -397,6 +422,16 @@ Begin
             k_n = 0;
         end
 
+        if( key(_m) )
+            if( !k_m )
+                k_m = 1;
+                heroidx = hero_next_hero(heroidx);
+            end
+        else
+           k_m = 0;
+        end
+
+        // Movement
         if(key(_left))
             heroid.flags = 1;
             herodata[heroidx].walk_mom -= herodata[heroidx].walk_acc;
@@ -464,19 +499,48 @@ end
 
 Function player_next_hero(current)
 Private
-    heroidx;
-Begin
     heroidx = 0;
+Begin
     while(heroidx<heroes && herodata[(current+heroidx)%heroes].claimed)
         heroidx++;
     end
     if(heroidx == heroes)
         return(-1);
     end
+
     herodata[current].claimed = false;
     herodata[(current+heroidx)%heroes].claimed = true;
     return((current+heroidx)%heroes);
 End
+
+Function hero_next_hero(heroidx)
+Private
+    n;
+Begin
+    n = iter_next_hero(heroidx);
+
+    if( n != heroidx )
+        herodata[heroidx].in_use = false;
+        herodata[n].in_use = true;
+
+        herodata[heroidx].shapeshift_to = n;
+    end
+
+    return( n );
+End
+
+Function iter_next_hero(current)
+Begin
+    for( x = current ; x < HEROES_MAX ; x++ )
+        if( !(herodata[x].in_use) ) return( x ); end
+    end
+    for( x = 0 ; x < current ; x++ )
+        if( !(herodata[x].in_use) ) return( x ); end
+    end
+
+    return( current );
+End
+
 //
 // Level objects and hero code
 //
@@ -484,16 +548,24 @@ Process hero(idx)
 Private
     anim_pos = 0;
 Begin
-    herodata[idx].action = ACT_IDLE;
-
     ctype = C_SCROLL;
     size = 400;
 
     x = 300+idx*400;
     y = 300;
     phy_body_create_box(id, 100, 100, 100, MAX_INT, 1, 100);
+    herodata[idx].in_use = true;
 
     Loop
+        if( herodata[idx].shapeshift_to != -1 )
+          anim_pos = idx;
+          idx = herodata[idx].shapeshift_to;
+          herodata[anim_pos].shapeshift_to = -1;
+          herodata[anim_pos].action = ACT_IDLE;
+          anim_pos = 0;
+        end
+
+        // Movement
         if( herodata[idx].walk_mom <> 0 )
             if( abs(herodata[idx].walk_mom) > herodata[idx].walk_max_speed * MOM_RES )
                 herodata[idx].walk_mom = sign(herodata[idx].walk_mom) * herodata[idx].walk_max_speed * MOM_RES;
@@ -513,6 +585,7 @@ Begin
             herodata[idx].action = ACT_IDLE;
         end
 
+        // Anims
         switch(herodata[idx].action)   // oh lol
         case ACT_IDLE:
             graph = lvl_pcx(herodata[idx].pcx_idle);
@@ -523,12 +596,12 @@ Begin
         end
         end
 
-        //if( herodata[idx].action == ACT_STOP )
-        //    frame( 200 );
-        //else
-        //    frame( 800 - 700 * (abs(herodata[idx].walk_mom) / herodata[idx].walk_max_speed) / MOM_RES);
-        //end
-        frame;
+        // Frame;
+        if( herodata[idx].action == ACT_STOP )
+            frame( 200 );
+        else
+            frame( 800 - 700 * (abs(herodata[idx].walk_mom) / herodata[idx].walk_max_speed) / MOM_RES);
+        end
     End
 End
 
@@ -597,4 +670,16 @@ End
 
 Process lift(minx, miny, maxx, maxy, startx, starty)
 Begin
+End
+
+Process Cog(graph,x,y)
+Begin
+  ctype = C_SCROLL;
+  x *= TILE_WIDTH;
+  y *= TILE_HEIGHT;
+
+  Loop
+    angle += 10000;
+    frame(200);
+  End
 End
