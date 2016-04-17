@@ -12,6 +12,7 @@ CONST
     SCREEN_HEIGHT = 960;
 
     TILE_KIND_NONE = 0;     // other
+    TILE_KIND_COG = 111;    // 'o'
     TILE_KIND_NORMAL = 120; // 'x'
     TILE_KIND_OTHER = 2;    //
     TILE_KIND_HERO1 = 49;   // '1'
@@ -24,11 +25,13 @@ CONST
     PCX_COGSY_IDLE = 4;
     PCX_COGSY_WALK = 5;
     PCX_TRIGSY_IDLE = 6;
+    TILE_GRAPH_COG = 7;
+    PCX_FAGSY_IDLE = 8;
 
     // Sprite sheet ids
     SPR_COGSY_WALK = 0;
 
-    HEROES_MAX = 3;
+    HEROES_MAX = 4;
     PLAYERS_MAX = 2;
 
     // Anim related
@@ -40,6 +43,7 @@ CONST
     HERO_BOXSY = 0;    // I see they're been called 1 and 2 but my memory be hazy so names D:
     HERO_COGSY = 1;
     HERO_TRIGSY= 2;
+    HERO_FAGSY = 3;
 GLOBAL
     struct leveldata
         fpg;
@@ -238,16 +242,20 @@ Begin
     lvl_load_pcx(PCX_COGSY_IDLE, "cogsy.map");
     lvl_load_pcx(PCX_COGSY_WALK, "cogsy_walk.pcx");
     lvl_load_pcx(PCX_TRIGSY_IDLE, "trigsy.map");
+    lvl_load_pcx(TILE_GRAPH_COG, "cog.pcx");
+    lvl_load_pcx(PCX_FAGSY_IDLE, "fagsy.map");
 
     extract_spr_sheet(PCX_COGSY_WALK, SPR_COGSY_WALK, 9);
 
     init_hero_graphics(HERO_BOXSY, PCX_BOXSY_IDLE, SPR_COGSY_WALK);         // INCORRECT WALK
     init_hero_graphics(HERO_COGSY, PCX_COGSY_IDLE, SPR_COGSY_WALK);
     init_hero_graphics(HERO_TRIGSY, PCX_TRIGSY_IDLE, SPR_COGSY_WALK);
+    init_hero_graphics(HERO_FAGSY, PCX_FAGSY_IDLE, SPR_COGSY_WALK);
 
-    init_hero_vars(HERO_BOXSY, 8, 25, 90);
+    init_hero_vars(HERO_BOXSY, 8, 125, 300);
     init_hero_vars(HERO_COGSY, 8, 250, 500);
     init_hero_vars(HERO_TRIGSY, 8, 250, 500);
+    init_hero_vars(HERO_FAGSY, 10, 200, 400);
 
     herodata[0].pid = hero(HERO_BOXSY);
     herodata[1].pid = hero(HERO_COGSY);
@@ -286,6 +294,9 @@ Begin
         case TILE_KIND_HERO2:
             herodata[1].pid.x = x*TILE_WIDTH + TILE_WIDTH/2;
             herodata[1].pid.y = y*TILE_HEIGHT + TILE_HEIGHT/2;
+        end
+        case TILE_KIND_COG:
+            Cog(lvl_pcx(TILE_GRAPH_COG), x, y);
         end
         default:
             leveldata.tiles[x+MAX_LEVEL_WIDTH*y].pid = tile(x, y, kind);
@@ -589,4 +600,16 @@ End
 
 Process lift(minx, miny, maxx, maxy, startx, starty)
 Begin
+End
+
+Process Cog(graph,x,y)
+Begin
+  ctype = C_SCROLL;
+  x *= TILE_WIDTH;
+  y *= TILE_HEIGHT;
+
+  Loop
+    angle += 10000;
+    frame(200);
+  End
 End
