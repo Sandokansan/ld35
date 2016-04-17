@@ -91,11 +91,11 @@ BEGIN
 
     set_fps(60,0);
     set_mode(SCREEN_WIDTH*1000 + SCREEN_HEIGHT);
-    load_pal("ld35.pal");
+    load_pal("../pal/ld35.pal");
 
     //splash();
 
-    load_level("prg\ld35\1.lvl");   // prg\ld35\
+    load_level("prg/ld35/1.lvl");   // prg\ld35\
 
     repeat
         frame;
@@ -154,7 +154,7 @@ End
 
 Function lvl_load_pcx(mID, filename) // Shorthand for those that can't use square brackets or forward slashes
 Begin
-  leveldata.loadedmap[mID] = load_map("pcx\" + filename);
+  leveldata.loadedmap[mID] = load_map("../pcx/" + filename);
   leveldata.loadedmaps++;
 End
 
@@ -225,8 +225,8 @@ Begin
     leveldata.fpg = 0;
 
     leveldata.loadedmap[TILE_GRAPH_NORMAL] = new_map(TILE_WIDTH, TILE_HEIGHT, 0, 0, 255);
-    leveldata.loadedmap[1] = load_pcx("pcx\background_fg.pcx"); //new_map(TILE_WIDTH, TILE_HEIGHT, 0, 0, 120);  fore, next bg
-    leveldata.loadedmap[2] = load_pcx("pcx\background_bg.pcx"); //  new_map(TILE_WIDTH, TILE_HEIGHT, 0, 0, 55);
+    leveldata.loadedmap[1] = load_pcx("../pcx/background_fg.pcx"); //new_map(TILE_WIDTH, TILE_HEIGHT, 0, 0, 120);  fore, next bg
+    leveldata.loadedmap[2] = load_pcx("../pcx/background_bg.pcx"); //  new_map(TILE_WIDTH, TILE_HEIGHT, 0, 0, 55);
     leveldata.loadedmaps = 3;
 
     lvl_load_pcx(PCX_BOXSY_IDLE, "boxsy.map"); // does above
