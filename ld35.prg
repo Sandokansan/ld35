@@ -351,6 +351,7 @@ End
 //
 // Player code
 //
+
 Process player(idx)
 Private
     heroidx = 0;
