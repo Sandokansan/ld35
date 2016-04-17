@@ -2,6 +2,9 @@
  * Ludum Dare #35 Entry
  */
 PROGRAM ld35;
+
+import "phys.so";
+
 CONST
     TILE_WIDTH = 128;
     TILE_HEIGHT = 128;
@@ -13,7 +16,6 @@ CONST
 
     TILE_KIND_NONE = 0;     // other
     TILE_KIND_NORMAL = 120; // 'x'
-    TILE_KIND_OTHER = 2;    //
     TILE_KIND_HERO1 = 49;   // '1'
     TILE_KIND_HERO2 = 50;   // '2'
 
@@ -54,6 +56,7 @@ GLOBAL
         struct tiles[MAX_LEVEL_WIDTH*MAX_LEVEL_HEIGHT]
             pid;
             state;
+            kind;
         end
         struct start
             x0;
@@ -87,11 +90,16 @@ GLOBAL
     struct playerdata[PLAYERS_MAX]
         pid;
     end
+LOCAL
+    kill;
 BEGIN
 
     set_fps(60,0);
+    write_int(0,1260,0,0,&fps);
     set_mode(SCREEN_WIDTH*1000 + SCREEN_HEIGHT);
     load_pal("pal/ld35.PAL");
+
+    phys_init();
 
     //splash();
 
@@ -103,6 +111,12 @@ BEGIN
 
     unload_level();
 END
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// Splash code
+//
+//////////////////////////////////////////////////////////////////////////////
 
 Function splash()
 Private
@@ -146,6 +160,12 @@ Begin
     until(ascii>0)
     pid.z = 0;
 End
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// Level loading
+//
+//////////////////////////////////////////////////////////////////////////////
 
 Function get_tile_kind(chr)
 Begin
@@ -246,7 +266,7 @@ Begin
 
     herodata[0].pid = hero(HERO_BOXSY);
     herodata[1].pid = hero(HERO_COGSY);
-    herodata[2].pid = hero(HERO_TRIGSY);
+    //herodata[2].pid = hero(HERO_TRIGSY);
     heroes = 2;
 
     lvlfile = fopen(s, "r");
@@ -261,13 +281,20 @@ Begin
 
         if(chr == 10)
             if(x>leveldata.width) leveldata.width=x; end
-            leveldata.height++;
             y++;
             x = 0;
             continue;
         end
 
-        kind = get_tile_kind(chr);
+        if(y+1>leveldata.height) leveldata.height=y+1; end
+
+        leveldata.tiles[x+MAX_LEVEL_WIDTH*y].kind = chr;//get_tile_kind(chr);
+        x++;
+    end
+
+    for(x=0; x<leveldata.width; x++)
+    for(y=0; y<leveldata.height; y++)
+        kind = leveldata.tiles[x+MAX_LEVEL_WIDTH*y].kind;
         switch(kind)
         case TILE_KIND_HERO1:
             herodata[0].pid.x = x*TILE_WIDTH + TILE_WIDTH/2;
@@ -282,7 +309,7 @@ Begin
         end
         end
 
-        x++;
+    end
     end
 
     leveldata.p_width = TILE_WIDTH * leveldata.width;
@@ -320,7 +347,8 @@ Begin
     for(x=0; x<MAX_LEVEL_WIDTH; x++)
         for(y=0; y<MAX_LEVEL_HEIGHT; y++)
             if(leveldata.tiles[x+MAX_LEVEL_WIDTH*y].pid)
-                signal(leveldata.tiles[x+MAX_LEVEL_WIDTH*y].pid, S_KILL);
+                //signal(leveldata.tiles[x+MAX_LEVEL_WIDTH*y].pid, S_KILL);
+                leveldata.tiles[x+MAX_LEVEL_WIDTH*y].pid.kill = 1;
             end
         end
     end
@@ -338,9 +366,12 @@ Begin
     leveldata.loadedfpgs = 0;
 End
 
+//////////////////////////////////////////////////////////////////////////////
 //
 // Player code
 //
+//////////////////////////////////////////////////////////////////////////////
+
 Process player(idx)
 Private
     heroidx = 0;
@@ -421,8 +452,12 @@ Begin
             y = leveldata.p_height/2;
         end
 
-        write_int(0,0,0,0,&x);
-        write_int(0,0,10,0,&y);
+        write_int(0, 0, 0,0,&x);
+        write_int(0,50, 0,0,&y);
+        write_int(0, 0,20,0,&herodata[0].pid.x);
+        write_int(0,50,20,0,&herodata[0].pid.y);
+        write_int(0, 0,30,0,&herodata[1].pid.x);
+        write_int(0,50,30,0,&herodata[1].pid.y);
         frame;
     end
 end
@@ -454,6 +489,10 @@ Begin
     ctype = C_SCROLL;
     size = 400;
 
+    x = 300+idx*400;
+    y = 300;
+    phy_body_create_box(id, 100, 100, 100, MAX_INT, 1, 100);
+
     Loop
         if( herodata[idx].walk_mom <> 0 )
             if( abs(herodata[idx].walk_mom) > herodata[idx].walk_max_speed * MOM_RES )
@@ -484,11 +523,12 @@ Begin
         end
         end
 
-        if( herodata[idx].action == ACT_STOP )
-            frame( 200 );
-         else
-            frame( 800 - 700 * (abs(herodata[idx].walk_mom) / herodata[idx].walk_max_speed) / MOM_RES);
-         end
+        //if( herodata[idx].action == ACT_STOP )
+        //    frame( 200 );
+        //else
+        //    frame( 800 - 700 * (abs(herodata[idx].walk_mom) / herodata[idx].walk_max_speed) / MOM_RES);
+        //end
+        frame;
     End
 End
 
@@ -503,25 +543,56 @@ Begin
 End
 
 Process tile(tx, ty, kind)
+Private
+    wall[4];
+    walls;
 Begin
+
+    kill = 0;
+    x = TILE_WIDTH*tx;
+    y = TILE_HEIGHT*ty;
 
     switch(kind)
     case TILE_KIND_NORMAL:
         graph = leveldata.loadedmap[TILE_GRAPH_NORMAL];
     end
     default:
-        graph = write_in_map(0,"t:" + kind, 0);
+        //graph = write_in_map(0,"t:" + kind, 0);
         return;
     end
     end
 
-    ctype = C_SCROLL;
-    x = TILE_WIDTH*tx;
-    y = TILE_HEIGHT*ty;
+    if(y==7) debug; end
 
-    Loop
+    if(tx>0)
+    if(leveldata.tiles[(tx-1)+ty*MAX_LEVEL_WIDTH].kind != TILE_KIND_NORMAL)
+        wall[walls++] = add_fixed_body(x,y,x,y+TILE_HEIGHT,3);
+    end end
+
+    if(tx<leveldata.width-1)
+    if(leveldata.tiles[(tx+1)+ty*MAX_LEVEL_WIDTH].kind != TILE_KIND_NORMAL)
+        wall[walls++] = add_fixed_body(x+TILE_WIDTH,y,x+TILE_WIDTH,y+TILE_HEIGHT,3);
+    end end
+
+    if(ty>0)
+    if(leveldata.tiles[tx+(ty-1)*MAX_LEVEL_WIDTH].kind != TILE_KIND_NORMAL)
+        wall[walls++] = add_fixed_body(x,y,x+TILE_WIDTH,y,3);
+    end end
+
+    if(ty<leveldata.height-1)
+    if(leveldata.tiles[tx+(ty+1)*MAX_LEVEL_WIDTH].kind != TILE_KIND_NORMAL)
+        wall[walls++] = add_fixed_body(x,y+TILE_HEIGHT,x+TILE_WIDTH,y+TILE_HEIGHT,3);
+    end end
+
+    ctype = C_SCROLL;
+
+    Repeat
         frame;
-    End
+    Until(kill)
+
+    for(;walls--;)
+        remove_fixed_body(wall[walls]);
+    end
 End
 
 Process lift(minx, miny, maxx, maxy, startx, starty)
