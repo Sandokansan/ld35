@@ -5,8 +5,8 @@ PROGRAM ld35;
 CONST
     TILE_WIDTH = 32;
     TILE_HEIGHT = 32;
-    LEVEL_WIDTH = 40;
-    LEVEL_HEIGHT = 40;
+    MAX_LEVEL_WIDTH = 40;
+    MAX_LEVEL_HEIGHT = 40;
 
     SCREEN_WIDTH = 320;
     SCREEN_HEIGHT = 240;
@@ -25,7 +25,7 @@ GLOBAL
         loadedfpgs;
         loadedmap[100];
         loadedmaps;
-        struct tiles[LEVEL_WIDTH*LEVEL_HEIGHT]
+        struct tiles[MAX_LEVEL_WIDTH*MAX_LEVEL_HEIGHT]
             pid;
             state;
         end
@@ -35,6 +35,13 @@ GLOBAL
             x1;
             y1;
         end
+        width;
+        height;
+        p_width;
+        p_height;
+        p_width_cbound;
+        p_height_cbound;
+        scroll;
     end
     heroes;
     struct herodata[HEROES_MAX]
@@ -141,7 +148,13 @@ Begin
     while(ftell(lvlfile) < filesize)
         fread(&chr, 1, lvlfile);
 
-        if(chr == 10) y++; x = 0; continue; end
+        if(chr == 10)
+            if(x>leveldata.width) leveldata.width=x; end
+            leveldata.height++;
+            y++;
+            x = 0;
+            continue;
+        end
 
         kind = get_tile_kind(chr);
         switch(kind)
@@ -154,13 +167,17 @@ Begin
             herodata[1].pid.y = y*TILE_HEIGHT + TILE_HEIGHT/2;
         end
         default:
-            leveldata.tiles[x+LEVEL_WIDTH*y].pid = tile(x, y, kind);
+            leveldata.tiles[x+MAX_LEVEL_WIDTH*y].pid = tile(x, y, kind);
         end
         end
 
         x++;
     end
 
+    leveldata.p_width = TILE_WIDTH * leveldata.width;
+    leveldata.p_height = TILE_HEIGHT * leveldata.height;
+    leveldata.p_width_cbound = leveldata.p_width - SCREEN_WIDTH/2;
+    leveldata.p_height_cbound = leveldata.p_height - SCREEN_HEIGHT/2;
 
     //for(x=0; x<LEVEL_WIDTH; x++)
     //    for(y=0; y<LEVEL_HEIGHT; y++)
@@ -174,20 +191,24 @@ Begin
 
     fg = leveldata.loadedmap[1];
     bg = leveldata.loadedmap[2];
-    start_scroll(0, 0, 0, bg, 0, 15);
+    leveldata.scroll = 0;
+    start_scroll(leveldata.scroll, 0, 0, bg, 0, 15);
+    scroll[leveldata.scroll].camera = camera();
 End
 
 Function unload_level()
 Begin
-
-    stop_scroll(0);
+    signal(scroll[leveldata.scroll].camera, S_KILL);
+    stop_scroll(leveldata.scroll);
 
     for(x=0; x<players; x++)
         signal(playerdata[x].pid, S_KILL);
     end
-    for(x=0; x<LEVEL_WIDTH; x++)
-        for(y=0; y<LEVEL_HEIGHT; y++)
-            signal(leveldata.tiles[x+LEVEL_WIDTH*y].pid, S_KILL);
+    for(x=0; x<MAX_LEVEL_WIDTH; x++)
+        for(y=0; y<MAX_LEVEL_HEIGHT; y++)
+            if(leveldata.tiles[x+MAX_LEVEL_WIDTH*y].pid)
+                signal(leveldata.tiles[x+MAX_LEVEL_WIDTH*y].pid, S_KILL);
+            end
         end
     end
     for(x=0; x<heroes; x++)
@@ -237,6 +258,47 @@ Begin
         frame;
     End
 End
+
+Process camera()
+Begin
+    priority = -1;
+
+    loop
+        if(  abs(herodata[0].pid.x - herodata[1].pid.x) < SCREEN_WIDTH
+          && abs(herodata[0].pid.y - herodata[1].pid.y) < SCREEN_HEIGHT
+          )
+            x = (herodata[0].pid.x + herodata[1].pid.x) / 2;
+            y = (herodata[0].pid.y + herodata[1].pid.y) / 2;
+        else
+            x = herodata[0].pid.x;
+            y = herodata[0].pid.y;
+        end
+
+        if(leveldata.p_width>SCREEN_WIDTH)
+            if(x<SCREEN_WIDTH/2)
+                x = SCREEN_WIDTH/2;
+            else if(x > leveldata.p_width_cbound)
+                x = leveldata.p_width_cbound;
+            end end
+        else
+            x = leveldata.p_width/2;
+        end
+
+        if(leveldata.p_height>SCREEN_HEIGHT)
+            if(y<SCREEN_HEIGHT/2)
+                y = SCREEN_HEIGHT/2;
+            else if(y > leveldata.p_height_cbound)
+                y = leveldata.p_height_cbound;
+            end end
+        else
+            y = leveldata.p_height/2;
+        end
+
+        write_int(0,0,0,0,&x);
+        write_int(0,0,10,0,&y);
+        frame;
+    end
+end
 
 Function player_next_hero(current)
 Private
