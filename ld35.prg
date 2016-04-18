@@ -6,13 +6,14 @@ PROGRAM ld35;
 import "phys.so";
 
 CONST
-    TILE_WIDTH = 128/4;
-    TILE_HEIGHT = 128/4;
+    SCALE = 4;
+    TILE_WIDTH = 32*SCALE;
+    TILE_HEIGHT = 32*SCALE;
     MAX_LEVEL_WIDTH = 40;
     MAX_LEVEL_HEIGHT = 40;
 
-    SCREEN_WIDTH = 1280/4;
-    SCREEN_HEIGHT = 960/4;
+    SCREEN_WIDTH = 320*SCALE;
+    SCREEN_HEIGHT = 240*SCALE;
 
     TILE_KIND_NONE = 0;     // other
     TILE_KIND_COG = 111;    // 'o'
@@ -102,7 +103,7 @@ LOCAL
 BEGIN
 
     set_fps(60,0);
-    write_int(0,1260,0,0,&fps);
+    write_int(0,SCREEN_WIDTH-20,0,0,&fps);
     set_mode(SCREEN_WIDTH*1000 + SCREEN_HEIGHT);
     load_pal("pal/ld35.PAL");
 
@@ -561,7 +562,7 @@ Private
     anim_pos = 0;
 Begin
     ctype = C_SCROLL;
-    size = 100;
+    size = 100*SCALE;
 
     x = 300+idx*100;
     y = 300;
@@ -692,7 +693,7 @@ End
 
 Process Cog(graph,x,y)
 Begin
-    size=25;
+    size=25*SCALE;
   ctype = C_SCROLL;
   x *= TILE_WIDTH;
   y *= TILE_HEIGHT;
