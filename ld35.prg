@@ -6,13 +6,13 @@ PROGRAM ld35;
 import "phys.so";
 
 CONST
-    TILE_WIDTH = 128;
-    TILE_HEIGHT = 128;
+    TILE_WIDTH = 128/4;
+    TILE_HEIGHT = 128/4;
     MAX_LEVEL_WIDTH = 40;
     MAX_LEVEL_HEIGHT = 40;
 
-    SCREEN_WIDTH = 1280;
-    SCREEN_HEIGHT = 960;
+    SCREEN_WIDTH = 1280/4;
+    SCREEN_HEIGHT = 960/4;
 
     TILE_KIND_NONE = 0;     // other
     TILE_KIND_COG = 111;    // 'o'
@@ -561,11 +561,11 @@ Private
     anim_pos = 0;
 Begin
     ctype = C_SCROLL;
-    size = 400;
+    size = 100;
 
-    x = 300+idx*400;
+    x = 300+idx*100;
     y = 300;
-    phy_body_create_box_bottom(id, 128, 128, 100, 10000, 1, 100); // x y mass moment elasticity friction
+    phy_body_create_box(id, 128/4, 128/4, 100);//, 10000, 1, 100); // x y mass moment elasticity friction
     herodata[idx].in_use = true;
 
     Loop
@@ -692,6 +692,7 @@ End
 
 Process Cog(graph,x,y)
 Begin
+    size=25;
   ctype = C_SCROLL;
   x *= TILE_WIDTH;
   y *= TILE_HEIGHT;
