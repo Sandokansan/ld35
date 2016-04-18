@@ -42,10 +42,11 @@ struct procbody {
 	int procid;
 	struct procbody *next;
 	struct procbody *prev;
+	byte changed;
 };
  
 
-struct procbody *bodies; 
+struct procbody *bodies = NULL; 
 
 #define proc(x) ((process *)&mem[x])
 
@@ -116,7 +117,7 @@ void phy_body_create_circle(void) {
 	// Setup procbody
 	newb->body = cpSpaceAddBody(space, cpBodyNew(mass, moment));
 	newb->procid = pid;
-
+	newb->changed=0;
 	cpBodySetPosition(newb->body, cpv( ((process *)&mem[pid])->x,((process *)&mem[pid])->y));
 
 	newb->shape = cpSpaceAddShape(space, cpCircleShapeNew(newb->body, radius, cpvzero));
@@ -134,7 +135,6 @@ void phy_body_create_circle(void) {
 }
 
 void phy_body_create_box_bottom(void) {
-
 	int friction = getparm();
 	int elasticity = getparm();
 	int moment = getparm();
@@ -196,6 +196,7 @@ void phy_init(void){
 	// cpVect is a 2D vector and cpv() is a shortcut for initializing them.
 	
 	int a=0;
+	
 	for(a=0;a<WALL_MAX;a++) {
 		walls[a]=NULL;
 	}
@@ -317,7 +318,7 @@ void kill_id(struct procbody *f) {
 	cpShapeFree(f->shape);
 	cpBodyFree(f->body);
 
-//	printf("process dead %d\n",id_offset);
+//	printf("process dead %d %x\n",id_offset,f);
 	
 	free(f);
 	
@@ -425,6 +426,24 @@ void phy_body_get_speed(void) {
     }
 }
 
+void phy_setxy(void) {
+	int y = getparm();
+	int x = getparm();
+	int pid = getparm();
+
+	struct procbody *pbody=findbody(pid);
+
+	if(pbody!=NULL) {
+		cpBodySetPosition(pbody->body, cpv(x,y));
+		cpBodySetVelocity(pbody->body,cpv(0,0));
+		proc(pid)->x=x;
+		proc(pid)->y=y;
+	}
+
+	pbody->changed=1;
+	retval(0);
+}
+
 void phy_end(void) {
 	// Clean up our objects and exit!
 	//cpShapeFree(ballShape);
@@ -458,15 +477,17 @@ void post_process(void) {
 //	ang2=to_degrees((double)ang);
 
 //	cpCircleShapeSetRadius(f->shape, 20*(proc(id_offset)->size*100)/10000); 
-
-	proc(id_offset)->x=pos.x;
-	proc(id_offset)->y=pos.y;
+	if(f->changed==0) {
+		proc(id_offset)->x=pos.x;
+		proc(id_offset)->y=pos.y;
+		proc(id_offset)->angle=-ang2*1000;
+	}
+	
+	f->changed=0;
 	
 //	printf("Proc data: id: %d radius: %d x0:%d y0:%d x1:%d y1:%d\n",id_offset, (proc(id_offset)->radius), (proc(id_offset)->reserved.x0),(proc(id_offset)->reserved.y0),(proc(id_offset)->reserved.x1),(proc(id_offset)->reserved.y1));
 //	printf("Proc data: id: %d graph: %d x0:%d y0:%d x1:%d y1:%d\n",id_offset, (proc(id_offset)->graph), (proc(id_offset)->reserved.x0),(proc(id_offset)->reserved.y0),(proc(id_offset)->reserved.x1),(proc(id_offset)->reserved.y1));
 	
-
-	proc(id_offset)->angle=-ang2*1000;
 
 }
 
@@ -479,8 +500,9 @@ void __export divlibrary(LIBRARY_PARAMS)
 	COM_export("phy_body_create_box_bottom",phy_body_create_box_bottom,7);
 	COM_export("phy_body_set_position",phy_body_set_position,3);
 	COM_export("phy_body_move",phy_body_move,3);
-	COM_export("phy_body_apply_force_xy",phy_body_apply_force_xy,3);
 	COM_export("phy_body_get_speed",phy_body_get_speed,1);
+	COM_export("phy_setxy",phy_setxy,3);
+	COM_export("phy_body_apply_force_xy",phy_body_apply_force_xy,3);
 
 	COM_export("phy_wall_create",phy_wall_create,5);
 	COM_export("phy_wall_destroy",phy_wall_destroy,1);
@@ -525,3 +547,4 @@ void __export divmain(COMMON_PARAMS)
 }
 
 void __export divend(COMMON_PARAMS) { }
+
