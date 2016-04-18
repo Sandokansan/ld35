@@ -143,6 +143,7 @@ void phy_body_create_box_bottom(void) {
 	int heighti = (cpFloat)(getparm());
 	int widthi = (cpFloat)(getparm());
 	int pid = getparm();
+    int i = 0;
 
     cpFloat h = heighti;
     cpFloat w = widthi;
@@ -158,14 +159,14 @@ void phy_body_create_box_bottom(void) {
 	//cpFloat moment = INFINITY;
 
 	// Setup procbody
-	newb->body = cpBodyNew(mass, moment<(2<<31) ? moment : INFINITY);
+	newb->body = cpBodyNew(mass, moment==0x8fffffff ? INFINITY : moment);
 	newb->procid = pid;
 
-	cpShape* s[4] = { cpSegmentShapeNew(newb->body, cpv(-w/2,-h), cpv(-w/2,0), radius)
-                    , cpSegmentShapeNew(newb->body, cpv(-w/2,-h), cpv(w/2,-h), radius)
-                    , cpSegmentShapeNew(newb->body, cpv(w/2,0), cpv(-w/2,0), radius)
-                    , cpSegmentShapeNew(newb->body, cpv(w/2,0), cpv(w/2,-h), radius)
-                    };
+	cpShape* s[4];
+    s[0] = cpSegmentShapeNew(newb->body, cpv(-w/2,-h), cpv(-w/2,0), radius);
+    s[1] = cpSegmentShapeNew(newb->body, cpv(-w/2,-h), cpv(w/2,-h), radius);
+    s[2] = cpSegmentShapeNew(newb->body, cpv(w/2,0), cpv(-w/2,0), radius);
+    s[3] = cpSegmentShapeNew(newb->body, cpv(w/2,0), cpv(w/2,-h), radius);
 
     for(i=0; i<4; i++) {
         s[i]->e = elasticity/100;
@@ -191,6 +192,7 @@ void phy_body_create_box_bottom(void) {
 
 	retval(0);
 }
+
 void phy_init(void){
 	// cpVect is a 2D vector and cpv() is a shortcut for initializing them.
 	
@@ -328,7 +330,7 @@ void kill_id(struct procbody *f) {
 
 void phy_loop(void) {
 
-	struct procbody *f = bodies;
+//	struct procbody *f = bodies;
 	
 //	while(f!=NULL) {
 //		if(f->procid>0)
@@ -388,21 +390,7 @@ void phy_body_move(void) {
     retval(0);
 }
 
-
-void phy_body_apply_force_xy(void) {
-    int y = getparm();
-    int x = getparm();
-    int id = getparm();
-    struct procbody* body = findbody(id);
-    if(body) {
-        cpVect force = cpv(x,y);
-        //cpBodyApplyForceAtLocalPoint(body->body, force, cpvzero);
-        cpBodyApplyImpulseAtLocalPoint(body->body, force, cpvzero);
-    }
-    retval(0);
-}
-
-void phy_setxy(void) {
+void phy_body_move(void) {
 	
 	int y = getparm();
 	int x = getparm();
@@ -420,6 +408,30 @@ void phy_setxy(void) {
 	pbody->changed=1;
 	retval(0);
 	
+void phy_body_apply_force_xy(void) {
+    int y = getparm();
+    int x = getparm();
+    int id = getparm();
+    struct procbody* body = findbody(id);
+    if(body) {
+        cpVect force = cpv(x,y);
+        //cpBodyApplyForceAtLocalPoint(body->body, force, cpvzero);
+        cpBodyApplyImpulseAtLocalPoint(body->body, force, cpvzero);
+    }
+    retval(0);
+}
+
+void phy_body_get_speed(void) {
+    int id = getparm();
+    struct procbody* body = findbody(id);
+    if(body) {
+        cpVect speed = cpBodyGetVelocity(body->body);
+        double val = sqrt(speed.x*speed.x + speed.y*speed.y);
+        retval(val);
+        printf("speed: %lf\n", val);
+    } else {
+        retval(0);
+    }
 }
 
 void phy_end(void) {
@@ -476,10 +488,13 @@ void __export divlibrary(LIBRARY_PARAMS)
 	
 	COM_export("phy_body_create_circle",phy_body_create_circle,3);
 	COM_export("phy_body_create_box_bottom",phy_body_create_box_bottom,7);
-	COM_export("phy_setxy",phy_setxy,3);
 	COM_export("phy_body_move",phy_body_move,3);
 //	COM_export("phy_body_force",ph_body_move,3);
 	COM_export("phy_body_apply_force_xy",phy_body_apply_force_xy,3);
+	COM_export("phy_body_set_position",phy_body_set_position,3);
+	COM_export("phy_body_move",phy_body_move,3);
+	COM_export("phy_body_apply_force_xy",phy_body_apply_force_xy,3);
+	COM_export("phy_body_get_speed",phy_body_get_speed,1);
 
 	COM_export("phy_wall_create",phy_wall_create,5);
 	COM_export("phy_wall_destroy",phy_wall_destroy,1);
