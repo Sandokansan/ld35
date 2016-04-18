@@ -135,7 +135,7 @@ void phy_body_create_circle(void) {
 }
 
 void phy_body_create_box_bottom(void) {
-	int i=0;
+	
 	int friction = getparm();
 	int elasticity = getparm();
 	int moment = getparm();
@@ -390,7 +390,7 @@ void phy_body_move(void) {
     retval(0);
 }
 
-void phy_body_move(void) {
+void phy_body_set_position(void) {
 	
 	int y = getparm();
 	int x = getparm();
@@ -408,6 +408,8 @@ void phy_body_move(void) {
 	pbody->changed=1;
 	retval(0);
 	
+}
+
 void phy_body_apply_force_xy(void) {
     int y = getparm();
     int x = getparm();
@@ -489,11 +491,9 @@ void __export divlibrary(LIBRARY_PARAMS)
 	COM_export("phy_body_create_circle",phy_body_create_circle,3);
 	COM_export("phy_body_create_box_bottom",phy_body_create_box_bottom,7);
 	COM_export("phy_body_move",phy_body_move,3);
-//	COM_export("phy_body_force",ph_body_move,3);
 	COM_export("phy_body_apply_force_xy",phy_body_apply_force_xy,3);
 	COM_export("phy_body_set_position",phy_body_set_position,3);
-	COM_export("phy_body_move",phy_body_move,3);
-	COM_export("phy_body_apply_force_xy",phy_body_apply_force_xy,3);
+
 	COM_export("phy_body_get_speed",phy_body_get_speed,1);
 
 	COM_export("phy_wall_create",phy_wall_create,5);
