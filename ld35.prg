@@ -3,7 +3,7 @@
  */
 PROGRAM ld35;
 
-import "phys.so";
+import "phys.dll";
 
 CONST
     SCALE = 4;
@@ -34,8 +34,9 @@ CONST
     // Sprite sheet ids
     SPR_COGSY_WALK = 0;
 
-    HEROES_MAX = 4;
+    HEROES_MAX = 2;
     PLAYERS_MAX = 2;
+    HERO_TYPES_MAX = 4;
 
     // Anim related
     ACT_IDLE = 0;
@@ -77,22 +78,24 @@ GLOBAL
         p_height_cbound;
         scroll;
     end
-    heroes;
-    struct herodata[HEROES_MAX]
-        claimed = 0;  // I presume this is for claimed by a player, as opposed to being in use, hence the tape.
-        pid;
-        // Graphics related
-        action;
+    struct herotype[HERO_TYPES_MAX]
+        in_use = 0;
         pcx_idle;
         spr_walk;
         // Movement
         walk_max_speed;
-        walk_mom;
         walk_acc;
         walk_deacc;
-        // TAPE LOLOLOLO WTH NVM
-        shapeshift_to = -1;
-        in_use = 0;
+    end
+    heroes;
+    struct herodata[HEROES_MAX]
+        claimed = 0;  // I presume this is for claimed by a player, as opposed to being in use, hence the tape.
+        my_type;
+        pid;
+        // Graphics related
+        action = 0;
+        // Movement
+        walk_mom;
     end
     players;
     struct playerdata[PLAYERS_MAX]
@@ -228,17 +231,17 @@ End
 
 Function init_hero_graphics(idx, idle, walk)
 Begin
-    herodata[idx].pcx_idle = idle;
-    herodata[idx].spr_walk = walk;
+    herotype[idx].pcx_idle = idle;
+    herotype[idx].spr_walk = walk;
 End
 
 Function init_hero_vars(idx, walk_speed, walk_acc, walk_deacc)
 Begin
-    herodata[idx].walk_max_speed = walk_speed;
-    herodata[idx].walk_acc = walk_acc;
-    herodata[idx].walk_deacc = walk_deacc;
+    herotype[idx].walk_max_speed = walk_speed;
+    herotype[idx].walk_acc = walk_acc;
+    herotype[idx].walk_deacc = walk_deacc;
 
-    herodata[idx].action = ACT_IDLE;
+    //herotype[idx].action = ACT_IDLE;
 End
 
 Function load_level(string s)
@@ -278,13 +281,13 @@ Begin
     init_hero_vars(HERO_TRIGSY, 8, 250, 500);
     init_hero_vars(HERO_FAGSY, 10, 200, 400);
 
-    herodata[0].pid = hero(HERO_BOXSY);
-    herodata[1].pid = hero(HERO_COGSY);
+    herodata[0].pid = hero(0, HERO_BOXSY);
+    herodata[1].pid = hero(1, HERO_COGSY);
     heroes = 2;
 
 //    herodata[2].pid = hero(HERO_TRIGSY);
 
-    lvlfile = fopen(s, "r");
+    //lvlfile = fopen(s, "r");
 
     if( lvlfile == 0 )
         s = "prg/ld35/" + s;
@@ -430,7 +433,7 @@ Begin
         if( key(_m) )
             if( !k_m )
                 k_m = 1;
-                heroidx = hero_next_hero(heroidx);
+                hero_next_hero(heroidx);
             end
         else
            k_m = 0;
@@ -439,14 +442,14 @@ Begin
         // Movement
         if(key(_left))
             heroid.flags = 1;
-            herodata[heroidx].walk_mom -= herodata[heroidx].walk_acc;
+            herodata[heroidx].walk_mom -= herotype[herodata[heroidx].my_type].walk_acc;
             //heroid.x -= herodata[heroidx].walk_speed;
             herodata[heroidx].action = ACT_WALK;
             forcex = -5000;
         else
             if(key(_right))
                 heroid.flags = 0;
-                herodata[heroidx].walk_mom += herodata[heroidx].walk_acc;
+                herodata[heroidx].walk_mom += herotype[herodata[heroidx].my_type].walk_acc;
                 //heroid.x += herodata[heroidx].walk_speed;
                 herodata[heroidx].action = ACT_WALK;
                 forcex = 5000;
@@ -530,25 +533,20 @@ Function hero_next_hero(heroidx)
 Private
     n;
 Begin
-    n = iter_next_hero(heroidx);
+    n = iter_next_hero(herodata[heroidx].my_type);
 
-    if( n != heroidx )
-        herodata[heroidx].in_use = false;
-        herodata[n].in_use = true;
-
-        herodata[heroidx].shapeshift_to = n;
+    if( n != herodata[heroidx].my_type )
+        herodata[heroidx].my_type = n;
     end
-
-    return( n );
 End
 
 Function iter_next_hero(current)
 Begin
-    for( x = current ; x < HEROES_MAX ; x++ )
-        if( !(herodata[x].in_use) ) return( x ); end
+    for( x = current ; x < HERO_TYPES_MAX ; x++ )
+        if( !(herotype[x].in_use) ) return( x ); end
     end
     for( x = 0 ; x < current ; x++ )
-        if( !(herodata[x].in_use) ) return( x ); end
+        if( !(herotype[x].in_use) ) return( x ); end
     end
 
     return( current );
@@ -557,7 +555,7 @@ End
 //
 // Level objects and hero code
 //
-Process hero(idx)
+Process hero(idx,my_type)
 Private
     anim_pos = 0;
 Begin
@@ -568,28 +566,30 @@ Begin
     y = 300;
     phy_body_create_box_center(id, 16*SCALE, 32*SCALE, 100, MAX_INT, 75, 70, 8*SCALE, 32*SCALE); //, 10000, 1, 100); // x y mass moment elasticity friction
     //phy_body_create_box(id, 16*SCALE, 32*SCALE, 100);
-    herodata[idx].in_use = true;
+
+    herodata[idx].my_type = my_type;
+    herotype[my_type].in_use = true;
 
     Loop
-        if( herodata[idx].shapeshift_to != -1 )
-          anim_pos = idx;
-          idx = herodata[idx].shapeshift_to;
-          herodata[anim_pos].shapeshift_to = -1;
-          herodata[anim_pos].action = ACT_IDLE;
-          anim_pos = 0;
+        // Shapeshift
+        if( herodata[idx].my_type != my_type )
+            herotype[my_type].in_use = false;
+            my_type = herodata[idx].my_type;
+            herotype[my_type].in_use = true;
+            anim_pos = 0;
         end
 
         // Movement
         if( herodata[idx].walk_mom <> 0 )
-            if( abs(herodata[idx].walk_mom) > herodata[idx].walk_max_speed * MOM_RES )
-                herodata[idx].walk_mom = sign(herodata[idx].walk_mom) * herodata[idx].walk_max_speed * MOM_RES;
+            if( abs(herodata[idx].walk_mom) > herotype[my_type].walk_max_speed * MOM_RES )
+                herodata[idx].walk_mom = sign(herodata[idx].walk_mom) * herotype[my_type].walk_max_speed * MOM_RES;
             end
 
             if( herodata[idx].action != ACT_WALK )
 
-                herodata[idx].walk_mom += asign(herodata[idx].walk_mom) * herodata[idx].walk_deacc;
+                herodata[idx].walk_mom += asign(herodata[idx].walk_mom) * herotype[my_type].walk_deacc;
 
-                if( abs(herodata[idx].walk_mom) <= herodata[idx].walk_deacc )
+                if( abs(herodata[idx].walk_mom) <= herotype[my_type].walk_deacc )
                     herodata[idx].walk_mom = 0;
                 end
             end
@@ -602,11 +602,11 @@ Begin
         // Anims
         switch(herodata[idx].action)   // oh lol
         case ACT_IDLE:
-            graph = lvl_pcx(herodata[idx].pcx_idle);
+            graph = lvl_pcx(herotype[my_type].pcx_idle);
         end
         case ACT_WALK, ACT_STOP:
-            anim_pos = next_spr(herodata[idx].spr_walk, anim_pos);
-            graph = spr_sheet(herodata[idx].spr_walk, anim_pos);
+            anim_pos = next_spr(herotype[my_type].spr_walk, anim_pos);
+            graph = spr_sheet(herotype[my_type].spr_walk, anim_pos);
         end
         end
 
