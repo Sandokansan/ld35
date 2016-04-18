@@ -36,19 +36,58 @@ static int init=0;
 #define iloc_len (mem[5]+mem[6])
 #define imem (mem[8])
 
-struct procbody {
+typedef struct procbody {
 	cpBody *body;
 	cpShape *shape;
 	int procid;
 	struct procbody *next;
 	struct procbody *prev;
 	byte changed;
-};
- 
+} procbody;
 
-struct procbody *bodies = NULL; 
-
+procbody *bodies = NULL;
 #define proc(x) ((process *)&mem[x])
+
+procbody* procbody_new(int pid, cpFloat mass, cpFloat moment) {
+	procbody *newb = (struct procbody*)div_malloc(sizeof(struct procbody));
+    if(!newb) return NULL;
+	newb->next = bodies;
+	newb->prev = NULL;
+    newb->body = cpSpaceAddBody(space, cpBodyNew(mass, moment));// : moment);cpBodyNew(mass, moment));
+    newb->procid = pid;
+    newb->changed=0;
+
+    // link it in
+	if(bodies) {
+		bodies->prev = newb;
+    }
+    bodies = newb;
+    return newb;
+}
+
+void procbody_delete(procbody* body) {
+	if(body==NULL)
+		return;
+
+	procbody *p = body->prev;
+	procbody *n = body->next;
+
+	if(p!=NULL) {
+		p->next=body->next;
+	} else {
+        bodies = body->next;
+    }
+
+	if(n!=NULL) {
+		n->prev = body->prev;
+	}
+
+	cpSpaceRemoveShape(space, body->shape);
+	cpSpaceRemoveBody(space, body->body);
+	cpShapeFree(body->shape);
+	cpBodyFree(body->body);
+	div_free(body);
+}
 
 void phy_wall_create(void) {
 
@@ -98,23 +137,12 @@ void phy_wall_destroy(void) {
 	
 }
 
-
-
 void phy_body_create_box(void) {
 
 	int mass = getparm();
 	int h = getparm();
 	int w = getparm();
 	int pid = getparm();
-
-	// Add procbody to linked list
-	struct procbody *newb = (struct procbody*)div_malloc(sizeof(struct procbody));
-	newb->next = bodies;
-	newb->prev = NULL;
-
-	// The moment of inertia is like mass for rotation
-	// Use the cpMomentFor*() functions to help you approximate it.
-//	cpFloat radius = ((float)diameter)/2;//20*(proc(pid)->size*100)/10000;
 
 	cpVect points[] = {
 		cpv(-w/2,-h/2),
@@ -123,37 +151,27 @@ void phy_body_create_box(void) {
 		cpv(-w/2,h/2)
 	};
 
-	cpFloat moment = cpMomentForPoly(mass, 4, points, cpvzero,0);
+	//cpFloat moment = cpMomentForPoly(mass, 4, points, cpvzero,0);
 
-/*
- *  int num = 4;
-    CGPoint verts[] = {
-        cpv(-31.5f, 69.5f),
-        cpv(41.5f, 66.5f),
-        cpv(40.5f, -69.5f),
-        cpv(-55.5f, -70.5f)
-    };
- 
-    float mass = 1.0;
-    float moment = cpMomentForPoly(mass, num, verts, CGPointZero);
-    * */
-    
 	// Setup procbody
-	newb->body = cpSpaceAddBody(space, cpBodyNew(mass, INFINITY));// : moment);cpBodyNew(mass, moment));
-	newb->procid = pid;
-	newb->changed=0;
-	cpBodySetPosition(newb->body, cpv( ((process *)&mem[pid])->x,((process *)&mem[pid])->y));
-
-	newb->shape = cpSpaceAddShape(space, cpBoxShapeNew(newb->body, (cpFloat)w/2, (cpFloat)h/2,0));
-	newb->shape->e = 0.75;
-
-	cpShapeSetFriction(newb->shape, 0.7);
-
-    // link it in
-	if(bodies) {
-		bodies->prev = newb;
+    procbody* newb = NULL;
+    cpBody* body = NULL;
+    if(pid>0) {
+        newb = procbody_new(pid, mass, INFINITY);
+        cpBodySetPosition(newb->body, cpv( ((process *)&mem[pid])->x,((process *)&mem[pid])->y));
+        body = newb->body;
+    } else {
+        body = space->staticBody;
     }
-    bodies = newb;
+
+    cpShape* shape = cpBoxShapeNew(body, (cpFloat)w, (cpFloat)h,0);
+	shape = cpSpaceAddShape(space, shape);
+	shape->e = 0.75;
+	cpShapeSetFriction(shape, 0.7);
+
+    if(pid>0) {
+        newb->shape = shape;
+    }
 
 	retval(0);
 }
@@ -164,92 +182,80 @@ void phy_body_create_circle(void) {
 	int diameter = getparm();
 	int pid = getparm();
 
-	// Add procbody to linked list
-	struct procbody *newb = (struct procbody*)div_malloc(sizeof(struct procbody));
-	newb->next = bodies;
-	newb->prev = NULL;
-
 	// The moment of inertia is like mass for rotation
 	// Use the cpMomentFor*() functions to help you approximate it.
 	cpFloat radius = ((float)diameter)/2;//20*(proc(pid)->size*100)/10000;
 	cpFloat moment = cpMomentForCircle(mass, 0, radius, cpvzero);
 
 	// Setup procbody
-	newb->body = cpSpaceAddBody(space, cpBodyNew(mass, moment));
-	newb->procid = pid;
-	newb->changed=0;
-	cpBodySetPosition(newb->body, cpv( ((process *)&mem[pid])->x,((process *)&mem[pid])->y));
+    procbody* newb = NULL;
+    cpBody* body = NULL;
+    if(pid>0) {
+        newb = procbody_new(pid, mass, moment);
+        cpBodySetPosition(newb->body, cpv( ((process *)&mem[pid])->x,((process *)&mem[pid])->y));
+        body = newb->body;
+    } else {
+        body = space->staticBody;
+    }
 
-	newb->shape = cpSpaceAddShape(space, cpCircleShapeNew(newb->body, radius, cpvzero));
-	newb->shape->e = 0.75;
-
+    cpShape* shape = cpCircleShapeNew(body, radius, cpvzero);
+	shape = cpSpaceAddShape(space, shape);
+	shape->e = 0.75;
 	cpShapeSetFriction(newb->shape, 0.7);
 
-    // link it in
-	if(bodies) {
-		bodies->prev = newb;
+    if(pid>0) {
+        newb->shape = shape;
     }
-    bodies = newb;
 
 	retval(0);
 }
 
-void phy_body_create_box_bottom(void) {
+void phy_body_create_box_center(void) {
+	int cy = getparm();
+	int cx = getparm();
 	int friction = getparm();
 	int elasticity = getparm();
-	int moment = getparm();
+	int momenti = getparm();
 	int mass = getparm();
-	int heighti = (cpFloat)(getparm());
-	int widthi = (cpFloat)(getparm());
+	int h = getparm();
+	int w = getparm();
 	int pid = getparm();
-    int i = 0;
 
-    cpFloat h = heighti;
-    cpFloat w = widthi;
+	cpVect points[] = {
+		cpv(-cx,-cy),
+		cpv(-cx,h-cy),
+		cpv(w-cx,h-cy),
+		cpv(w-cx,-cy)
+	};
 
-	// Add procbody to linked list
-	struct procbody *newb = (struct procbody*)div_malloc(sizeof(struct procbody));
-	newb->next = bodies;
-	newb->prev = NULL;
-
-	// The moment of inertia is like mass for rotation
-	// Use the cpMomentFor*() functions to help you approximate it.
-	cpFloat radius = 1;//((float)diameter)/2;//20*(proc(pid)->size*100)/10000;
-	//cpFloat moment = INFINITY;
+	//cpFloat moment = ;
+    cpFloat moment = (momenti == 0x7fffffff) ? INFINITY
+                   : (momenti == 0)          ? cpMomentForPoly(mass, 4, points, cpvzero,0)
+                   :                           (cpFloat)momenti
+                   ;
 
 	// Setup procbody
-	newb->body = cpBodyNew(mass, moment==0x8fffffff ? INFINITY : moment);
-	newb->procid = pid;
-
-	cpShape* s[4];
-    s[0] = cpSegmentShapeNew(newb->body, cpv(-w/2,-h), cpv(-w/2,0), radius);
-    s[1] = cpSegmentShapeNew(newb->body, cpv(-w/2,-h), cpv(w/2,-h), radius);
-    s[2] = cpSegmentShapeNew(newb->body, cpv(w/2,0), cpv(-w/2,0), radius);
-    s[3] = cpSegmentShapeNew(newb->body, cpv(w/2,0), cpv(w/2,-h), radius);
-
-    for(i=0; i<4; i++) {
-        s[i]->e = elasticity/100;
-        cpShapeSetFriction(s[i], friction/100);
-        cpSpaceAddShape(space, s[i]);
+    procbody* newb = NULL;
+    cpBody* body = NULL;
+    if(pid>0) {
+        newb = procbody_new(pid, mass, moment);
+        cpBodySetPosition(newb->body, cpv( ((process *)&mem[pid])->x,((process *)&mem[pid])->y));
+        body = newb->body;
+        //cpBodySetCenterOfGravity(newb->body, cpv(w/2-cx, h/2-cy));
+    } else {
+        body = space->staticBody;
     }
-	printf("HELLO %i\n", __LINE__); fflush(stdout);
 
-	//newb->shape = cpSpaceAddShape(space, cpCircleShapeNew(newb->body, radius, cpv(0,-radius)));
-	cpSpaceAddBody(space, newb->body);
-	cpBodySetPosition(newb->body, cpv( ((process *)&mem[pid])->x,((process *)&mem[pid])->y));
+    cpShape* shape = cpPolyShapeNew(body, 4, points, cpTransformIdentity, 0);
+	shape = cpSpaceAddShape(space, shape);
+	shape->e = 0.75;
+	cpShapeSetFriction(shape, 0.7);
 
-//	cpShape* s = cpBoxShapeNew(newb->body, width, height, radius);
-//	printf("HELLO %i\n", __LINE__); fflush(stdout);
-//	newb->shape = cpSpaceAddShape(space, s);
-//	newb->shape = cpSpaceAddShape(space, cpCircleShapeNew(newb->body, radius, cpvzero));
-
-    // link it in
-	if(bodies) {
-		bodies->prev = newb;
+    if(pid>0) {
+        newb->shape = shape;
     }
-    bodies = newb;
 
-	retval(0);
+    retval(0);
 }
 
 void phy_init(void){
@@ -355,38 +361,6 @@ struct procbody * findbody(int id) {
 	return NULL;
 }
 
-void kill_id(struct procbody *f) {
-	if(f==NULL)
-		return;
-		
-	struct procbody *p = f->prev;
-	struct procbody *n = f->next;
-
-// redo stack
-	if(p!=NULL) {
-		p->next=f->next;
-	} else {
-        bodies = f->next;
-    }
-	
-	if(n!=NULL) {
-		n->prev = f->prev;
-	}
-
-	cpSpaceRemoveShape(space, f->shape);
-	cpSpaceRemoveBody(space, f->body);
-	cpShapeFree(f->shape);
-	cpBodyFree(f->body);
-
-//	printf("process dead %d %x\n",id_offset,f);
-	
-	free(f);
-	
-	return ;
-
-}
-
-
 void phy_loop(void) {
 
 //	struct procbody *f = bodies;
@@ -394,7 +368,7 @@ void phy_loop(void) {
 //	while(f!=NULL) {
 //		if(f->procid>0)
 //			if(proc(f->procid)->reserved.status==0)
-//				kill_id(f);
+//				procbody_delete(f);
 //
 //		f=f->next;
 //
@@ -480,7 +454,6 @@ void phy_body_get_speed(void) {
         cpVect speed = cpBodyGetVelocity(body->body);
         double val = sqrt(speed.x*speed.x + speed.y*speed.y);
         retval(val);
-        printf("speed: %lf\n", val);
     } else {
         retval(0);
     }
@@ -525,7 +498,7 @@ void post_process(void) {
 		return;
 
 	if(proc(id_offset)->reserved.status==0) {
-		kill_id(f);
+		procbody_delete(f);
 		return;
 	}
 
@@ -558,7 +531,7 @@ void __export divlibrary(LIBRARY_PARAMS)
 	
 	COM_export("phy_body_create_circle",phy_body_create_circle,3);
 	COM_export("phy_body_create_box",phy_body_create_box,4);
-	COM_export("phy_body_create_box_bottom",phy_body_create_box_bottom,7);
+	COM_export("phy_body_create_box_center",phy_body_create_box_center,9);
 	COM_export("phy_body_set_position",phy_body_set_position,3);
 	COM_export("phy_body_move",phy_body_move,3);
 	COM_export("phy_body_get_speed",phy_body_get_speed,1);

@@ -566,7 +566,8 @@ Begin
 
     x = 300+idx*100;
     y = 300;
-    phy_body_create_box(id, 128/4, 128/4, 100);//, 10000, 1, 100); // x y mass moment elasticity friction
+    phy_body_create_box_center(id, 16*SCALE, 32*SCALE, 100, MAX_INT, 75, 70, 8*SCALE, 32*SCALE); //, 10000, 1, 100); // x y mass moment elasticity friction
+    //phy_body_create_box(id, 16*SCALE, 32*SCALE, 100);
     herodata[idx].in_use = true;
 
     Loop
