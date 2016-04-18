@@ -42,7 +42,7 @@ CONST
     ACT_IDLE = 0;
     ACT_WALK = 1;
     ACT_STOP = 2;
-    MOM_RES = 1000; // momemtum "resolution" or scale
+    MOM_RES = 1000; // momemtum "resolution" or scale -- Since physics it's a bit different.
 
     HERO_BOXSY = 0;    // I see they're been called 1 and 2 but my memory be hazy so names D:
     HERO_COGSY = 1;
@@ -94,6 +94,7 @@ GLOBAL
         pid;
         // Graphics related
         action = 0;
+        anim_pos = 0;
         // Movement
         walk_mom;
     end
@@ -285,8 +286,6 @@ Begin
     herodata[1].pid = hero(1, HERO_COGSY);
     heroes = 2;
 
-//    herodata[2].pid = hero(HERO_TRIGSY);
-
     //lvlfile = fopen(s, "r");
 
     if( lvlfile == 0 )
@@ -331,7 +330,7 @@ Begin
             phy_body_set_position(herodata[1].pid, x*TILE_WIDTH + TILE_WIDTH/2, y*TILE_HEIGHT + TILE_HEIGHT/2);
         end
         case TILE_KIND_COG:
-            Cog(lvl_pcx(TILE_GRAPH_COG), x, y);
+            leveldata.tiles[x+MAX_LEVEL_WIDTH*y].pid = Cog(lvl_pcx(TILE_GRAPH_COG), x, y);
         end
         default:
             leveldata.tiles[x+MAX_LEVEL_WIDTH*y].pid = tile(x, y, kind);
@@ -371,7 +370,7 @@ Begin
     stop_scroll(leveldata.scroll);
 
     for(x=0; x<players; x++)
-        signal(playerdata[x].pid, S_KILL);
+        signal(playerdata[x].pid, S_KILL_TREE);
     end
     for(x=0; x<MAX_LEVEL_WIDTH; x++)
         for(y=0; y<MAX_LEVEL_HEIGHT; y++)
@@ -382,7 +381,7 @@ Begin
         end
     end
     for(x=0; x<heroes; x++)
-        signal(herodata[x].pid, S_KILL);
+        signal(herodata[x].pid, S_KILL_TREE);
     end
 
     for(x=0; x<leveldata.loadedmaps; x++)
@@ -393,6 +392,8 @@ Begin
         unload_fpg(leveldata.loadedfpg[x]);
     end
     leveldata.loadedfpgs = 0;
+
+    let_me_alone(); // TAPE to kill hero_animators()
 End
 
 //////////////////////////////////////////////////////////////////////////////
@@ -445,25 +446,26 @@ Begin
             herodata[heroidx].walk_mom -= herotype[herodata[heroidx].my_type].walk_acc;
             //heroid.x -= herodata[heroidx].walk_speed;
             herodata[heroidx].action = ACT_WALK;
-            forcex = -5000;
+            //forcex = -5000;
         else
             if(key(_right))
                 heroid.flags = 0;
                 herodata[heroidx].walk_mom += herotype[herodata[heroidx].my_type].walk_acc;
                 //heroid.x += herodata[heroidx].walk_speed;
                 herodata[heroidx].action = ACT_WALK;
-                forcex = 5000;
+                //forcex = 5000;
             else
-                forcex = 0;
+                //forcex = 0;
                 herodata[heroidx].action = ACT_STOP;
             end
         end
 
         //phy_body_move(heroid, herodata[heroidx].walk_mom / MOM_RES, 0);
+        /*
         if(phy_body_get_speed(heroid) < 500)
             phy_body_apply_force_xy(heroid, forcex, forcey);
         end
-
+        */
         frame;
     End
 End
@@ -557,26 +559,35 @@ End
 //
 Process hero(idx,my_type)
 Private
-    anim_pos = 0;
+    prev_y = 0;
+    falling =0;
+    speed = 0;
 Begin
     ctype = C_SCROLL;
     size = 100*SCALE;
 
     x = 300+idx*100;
     y = 300;
-    phy_body_create_box_center(id, 16*SCALE, 32*SCALE, 100, MAX_INT, 75, 70, 8*SCALE, 32*SCALE); //, 10000, 1, 100); // x y mass moment elasticity friction
+    // Elasticity and friction seem to be hard coded D:
+    phy_body_create_box_center(id, 16*SCALE, 32*SCALE, 100, MAX_INT, 0, 0, 8*SCALE, 32*SCALE); //, 10000, 1, 100); // x y mass moment elasticity friction
     //phy_body_create_box(id, 16*SCALE, 32*SCALE, 100);
 
     herodata[idx].my_type = my_type;
     herotype[my_type].in_use = true;
 
+    hero_animator(idx);
+
+    write_int(0,10,100 + 20 * idx, 0, &falling);
+
     Loop
+        speed = phy_body_get_speed(id);
+        falling = 1000 - 900 * clamp(speed * 100 / get_hero_max_speed(idx), 0, 100) / 100;
         // Shapeshift
         if( herodata[idx].my_type != my_type )
             herotype[my_type].in_use = false;
             my_type = herodata[idx].my_type;
             herotype[my_type].in_use = true;
-            anim_pos = 0;
+            herodata[idx].anim_pos = 0;
         end
 
         // Movement
@@ -594,29 +605,55 @@ Begin
                 end
             end
 
-            x += herodata[idx].walk_mom / MOM_RES;
+            //x += herodata[idx].walk_mom / MOM_RES;
         else
-            herodata[idx].action = ACT_IDLE;
+            if( speed == 0 or y <> prev_y )
+                herodata[idx].action = ACT_IDLE;
+            end
         end
 
-        // Anims
+        // Physics / moving
+        if(phy_body_get_speed(id) < herotype[my_type].walk_max_speed * 50)  // ugh
+            phy_body_apply_force_xy(id, herodata[idx].walk_mom, 0);
+        end
+
+        prev_y = y;
+        frame;
+    End
+End
+
+Function get_hero_max_speed(idx)
+Begin
+    return( herotype[herodata[idx].my_type].walk_max_speed * 50 ); // ugh
+End
+
+Process hero_animator(idx)   // Because frame; stuff and physics don't dance together
+Begin
+    Loop
         switch(herodata[idx].action)   // oh lol
         case ACT_IDLE:
-            graph = lvl_pcx(herotype[my_type].pcx_idle);
+            father.graph = lvl_pcx(herotype[herodata[idx].my_type].pcx_idle);
         end
         case ACT_WALK, ACT_STOP:
-            anim_pos = next_spr(herotype[my_type].spr_walk, anim_pos);
-            graph = spr_sheet(herotype[my_type].spr_walk, anim_pos);
+            herodata[idx].anim_pos = next_spr(herotype[herodata[idx].my_type].spr_walk, herodata[idx].anim_pos);
+            father.graph = spr_sheet(herotype[herodata[idx].my_type].spr_walk, herodata[idx].anim_pos);
         end
         end
 
-        frame;
-        //if( herodata[idx].action == ACT_STOP )
-        //    frame( 200 );
-        //else
-        //    frame( 800 - 700 * (abs(herodata[idx].walk_mom) / herodata[idx].walk_max_speed) / MOM_RES);
-        //end
+        if( herodata[idx].action == ACT_IDLE )
+            frame( 200 );
+        else
+            frame( 1000 - 900 * clamp(phy_body_get_speed(father) * 100 / get_hero_max_speed(idx), 0, 100) / 100 );
+            //frame( 800 - 700 * (abs(herodata[idx].walk_mom) / herotype[herodata[idx].my_type].walk_max_speed) / MOM_RES);
+        end
     End
+End
+
+Function clamp(val, min, max)
+Begin
+    if( val < min ) return( min ); end
+    if( val > max ) return( max ); end
+    return( val );
 End
 
 Function sign(val)
@@ -699,8 +736,8 @@ Begin
   x *= TILE_WIDTH;
   y *= TILE_HEIGHT;
 
-  Loop
+  Repeat
     angle += 10000;
     frame(200);
-  End
+  Until(kill)
 End
