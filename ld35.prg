@@ -553,7 +553,7 @@ Begin
 
     x = 300+idx*400;
     y = 300;
-    phy_body_create_box(id, 100, 100, 100, MAX_INT, 1, 100);
+    phy_body_create_box_bottom(id, 100, 100, 100, MAX_INT, 1, 100);
     herodata[idx].in_use = true;
 
     Loop
@@ -634,8 +634,6 @@ Begin
         return;
     end
     end
-
-    if(y==7) debug; end
 
     if(tx>0)
     if(leveldata.tiles[(tx-1)+ty*MAX_LEVEL_WIDTH].kind != TILE_KIND_NORMAL)

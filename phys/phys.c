@@ -47,14 +47,9 @@ struct procbody {
 
 struct procbody *bodies; 
 
-void rum(void) {
-	int i=getparm();
-	retval(0);
-}
-
 #define proc(x) ((process *)&mem[x])
 
-void add_fixed_body(void) {
+void phy_wall_create(void) {
 
 	int diam=getparm();
 	int y2=getparm();
@@ -87,7 +82,7 @@ void add_fixed_body(void) {
 	
 }
 
-void remove_fixed_body(void) {
+void phy_wall_destroy(void) {
 	int id=getparm();
 	
 	if(cpSpaceContainsShape(space, walls[id])) {
@@ -102,53 +97,7 @@ void remove_fixed_body(void) {
 	
 }
 
-void add_body(void) {
-	
-	int mid = getparm();
-	
-	struct procbody *newb = (struct procbody*)div_malloc(sizeof(struct procbody));
-
-	struct procbody *n = bodies->next;
-		
-	cpFloat radius = 20*(proc(mid)->size*100)/10000;
-	
-//	printf("size %d, radius %f %d %d %d\n",proc(mid)->size, radius , proc(mid)->reserved.x0,  proc(mid)->reserved.x1,  proc(mid)->radius);
-
-	//*
-	//	(((process *)&mem[mid])->size/100);
-	cpFloat mass = 10;
-	
-	// The moment of inertia is like mass for rotation
-	// Use the cpMomentFor*() functions to help you approximate it.
-	cpFloat moment = cpMomentForCircle(mass, 0, radius, cpvzero);
-	
-	newb->next = bodies->next;
-	newb->prev = bodies;
-	if(n!=NULL)
-		n->prev = newb;
-	
-
-	bodies->next = newb;
-	
-	newb->body = cpSpaceAddBody(space, cpBodyNew(mass, moment));
-	newb->procid = mid;
-	
-	cpBodySetPosition(newb->body, cpv( ((process *)&mem[mid])->x,((process *)&mem[mid])->y));
-	
-	newb->shape = cpSpaceAddShape(space, cpCircleShapeNew(newb->body, radius, cpvzero));
-
-	newb->shape->e = 0.75;
-
-//	newb->shape->u = 1;
-	
-	cpShapeSetFriction(newb->shape, 0.7);
-		
-//	printf("new body: %d x: %d y:%d\n",mid, ((process *)&mem[mid])->x,((process *)&mem[mid])->y);
-	
-	retval(0);
-}
-
-void ph_body_create_circle(void) {
+void phy_body_create_circle(void) {
 
 	int mass = getparm();
 	int diameter = getparm();
@@ -184,15 +133,18 @@ void ph_body_create_circle(void) {
 	retval(0);
 }
 
-void ph_body_create_box(void) {
+void phy_body_create_box_bottom(void) {
 
 	int friction = getparm();
 	int elasticity = getparm();
 	int moment = getparm();
 	int mass = getparm();
-	cpFloat height = getparm();
-	cpFloat width = getparm();
+	int heighti = (cpFloat)(getparm());
+	int widthi = (cpFloat)(getparm());
 	int pid = getparm();
+
+    cpFloat h = heighti;
+    cpFloat w = widthi;
 
 	// Add procbody to linked list
 	struct procbody *newb = (struct procbody*)div_malloc(sizeof(struct procbody));
@@ -201,20 +153,27 @@ void ph_body_create_box(void) {
 
 	// The moment of inertia is like mass for rotation
 	// Use the cpMomentFor*() functions to help you approximate it.
-	cpFloat radius = 32;//((float)diameter)/2;//20*(proc(pid)->size*100)/10000;
+	cpFloat radius = 1;//((float)diameter)/2;//20*(proc(pid)->size*100)/10000;
 	//cpFloat moment = INFINITY;
 
 	// Setup procbody
 	newb->body = cpBodyNew(mass, moment<(2<<31) ? moment : INFINITY);
 	newb->procid = pid;
 
-//	cpSegmentShapeNew(newb->body, cpv(width,height), cpv(0,height), radius);
-//	cpSegmentShapeNew(newb->body, cpv(width,height), cpv(width,0), radius);
-//	cpSegmentShapeNew(newb->body, cpv(width,height), cpv(0,height), radius);
-//	cpSegmentShapeNew(newb->body, cpv(width,height), cpv(width,0), radius);
+	cpShape* s[4] = { cpSegmentShapeNew(newb->body, cpv(-w/2,-h), cpv(-w/2,0), radius)
+                    , cpSegmentShapeNew(newb->body, cpv(-w/2,-h), cpv(w/2,-h), radius)
+                    , cpSegmentShapeNew(newb->body, cpv(w/2,0), cpv(-w/2,0), radius)
+                    , cpSegmentShapeNew(newb->body, cpv(w/2,0), cpv(w/2,-h), radius)
+                    };
+
+    for(int i=0; i<4; i++) {
+        s[i]->e = elasticity/100;
+        cpShapeSetFriction(s[i], friction/100);
+        cpSpaceAddShape(space, s[i]);
+    }
 	printf("HELLO %i\n", __LINE__); fflush(stdout);
 
-	newb->shape = cpSpaceAddShape(space, cpCircleShapeNew(newb->body, radius, cpv(0,-radius)));
+	//newb->shape = cpSpaceAddShape(space, cpCircleShapeNew(newb->body, radius, cpv(0,-radius)));
 	cpSpaceAddBody(space, newb->body);
 	cpBodySetPosition(newb->body, cpv( ((process *)&mem[pid])->x,((process *)&mem[pid])->y));
 
@@ -222,9 +181,6 @@ void ph_body_create_box(void) {
 //	printf("HELLO %i\n", __LINE__); fflush(stdout);
 //	newb->shape = cpSpaceAddShape(space, s);
 //	newb->shape = cpSpaceAddShape(space, cpCircleShapeNew(newb->body, radius, cpvzero));
-	newb->shape->e = elasticity/100;
-
-	cpShapeSetFriction(newb->shape, friction/100);
 
     // link it in
 	if(bodies) {
@@ -234,7 +190,7 @@ void ph_body_create_box(void) {
 
 	retval(0);
 }
-void phys_init(void){
+void phy_init(void){
 	// cpVect is a 2D vector and cpv() is a shortcut for initializing them.
 	
 	int a=0;
@@ -366,7 +322,7 @@ void kill_id(struct procbody *f) {
 }
 
 
-void phys_loop(void) {
+void phy_loop(void) {
 
 	struct procbody *f = bodies;
 	
@@ -418,7 +374,7 @@ void phys_loop(void) {
 
 
 
-void phys_end(void) {	
+void phy_end(void) {
 	// Clean up our objects and exit!
 	//cpShapeFree(ballShape);
 	//cpBodyFree(ballBody);
@@ -466,18 +422,21 @@ void post_process(void) {
 void __export divlibrary(LIBRARY_PARAMS)
 {
 
-	COM_export("rum",rum,1);
-	COM_export("phys_init",phys_init,0);
+	COM_export("phy_init",phy_init,0);
 	
-	COM_export("add_body",add_body,1);
-	COM_export("phy_body_create_circle",ph_body_create_circle,3);
-	COM_export("phy_body_create_box",ph_body_create_box,7);
+	COM_export("phy_body_create_circle",phy_body_create_circle,3);
+	COM_export("phy_body_create_box_bottom",phy_body_create_box_bottom,7);
 //	COM_export("phy_body_move",ph_body_move,3);
 //	COM_export("phy_body_force",ph_body_move,3);
 
-	COM_export("add_fixed_body",add_fixed_body,5); 
-	COM_export("remove_fixed_body",remove_fixed_body,1);
-	
+	COM_export("phy_wall_create",phy_wall_create,5);
+	COM_export("phy_wall_destroy",phy_wall_destroy,1);
+
+    // old stuff
+	COM_export("phys_init",phy_init,0);
+	COM_export("add_fixed_body",phy_wall_create,5);
+	COM_export("remove_fixed_body",phy_wall_destroy,1);
+
 //	COM_export("Pixelate_Background",Pixelate_Background,1);
 
 }
@@ -494,8 +453,8 @@ void process_map(char *map, int32_t len) {
 
 void post_process_buffer(void) {
 	if(!init)
-        phys_init();
-	phys_loop();
+        phy_init();
+	phy_loop();
 }
 
 void __export divmain(COMMON_PARAMS)
