@@ -302,7 +302,9 @@ void kill_id(struct procbody *f) {
 // redo stack
 	if(p!=NULL) {
 		p->next=f->next;
-	}
+	} else {
+        bodies = f->next;
+    }
 	
 	if(n!=NULL) {
 		n->prev = f->prev;
