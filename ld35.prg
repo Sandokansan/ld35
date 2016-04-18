@@ -317,12 +317,14 @@ Begin
         kind = leveldata.tiles[x+MAX_LEVEL_WIDTH*y].kind;
         switch(kind)
         case TILE_KIND_HERO1:
-            herodata[0].pid.x = x*TILE_WIDTH + TILE_WIDTH/2;
-            herodata[0].pid.y = y*TILE_HEIGHT + TILE_HEIGHT/2;
+            //herodata[0].pid.x = x*TILE_WIDTH + TILE_WIDTH/2;
+            //herodata[0].pid.y = y*TILE_HEIGHT + TILE_HEIGHT/2;
+            phy_body_set_position(herodata[0].pid, x*TILE_WIDTH + TILE_WIDTH/2, y*TILE_HEIGHT + TILE_HEIGHT/2);
         end
         case TILE_KIND_HERO2:
             herodata[1].pid.x = x*TILE_WIDTH + TILE_WIDTH/2;
             herodata[1].pid.y = y*TILE_HEIGHT + TILE_HEIGHT/2;
+            phy_body_set_position(herodata[1].pid, x*TILE_WIDTH + TILE_WIDTH/2, y*TILE_HEIGHT + TILE_HEIGHT/2);
         end
         case TILE_KIND_COG:
             Cog(lvl_pcx(TILE_GRAPH_COG), x, y);
@@ -400,6 +402,8 @@ Private
     heroidx = 0;
     k_n, k_m;
     heroid;
+    forcex;
+    forcey;
 Begin
 
     ctype = C_SCROLL;
@@ -437,15 +441,23 @@ Begin
             herodata[heroidx].walk_mom -= herodata[heroidx].walk_acc;
             //heroid.x -= herodata[heroidx].walk_speed;
             herodata[heroidx].action = ACT_WALK;
+            forcex = -5000;
         else
             if(key(_right))
                 heroid.flags = 0;
                 herodata[heroidx].walk_mom += herodata[heroidx].walk_acc;
                 //heroid.x += herodata[heroidx].walk_speed;
                 herodata[heroidx].action = ACT_WALK;
+                forcex = 5000;
             else
+                forcex = 0;
                 herodata[heroidx].action = ACT_STOP;
             end
+        end
+
+        //phy_body_move(heroid, herodata[heroidx].walk_mom / MOM_RES, 0);
+        if(phy_body_get_speed(heroid) < 500)
+            phy_body_apply_force_xy(heroid, forcex, forcey);
         end
 
         frame;
@@ -553,7 +565,7 @@ Begin
 
     x = 300+idx*400;
     y = 300;
-    phy_body_create_box_bottom(id, 100, 100, 100, MAX_INT, 1, 100);
+    phy_body_create_box_bottom(id, 128, 128, 100, 10000, 1, 100); // x y mass moment elasticity friction
     herodata[idx].in_use = true;
 
     Loop
@@ -596,12 +608,12 @@ Begin
         end
         end
 
-        // Frame;
-        if( herodata[idx].action == ACT_STOP )
-            frame( 200 );
-        else
-            frame( 800 - 700 * (abs(herodata[idx].walk_mom) / herodata[idx].walk_max_speed) / MOM_RES);
-        end
+        frame;
+        //if( herodata[idx].action == ACT_STOP )
+        //    frame( 200 );
+        //else
+        //    frame( 800 - 700 * (abs(herodata[idx].walk_mom) / herodata[idx].walk_max_speed) / MOM_RES);
+        //end
     End
 End
 
@@ -619,11 +631,14 @@ Process tile(tx, ty, kind)
 Private
     wall[4];
     walls;
+    //draws[4];
+    w;
 Begin
 
     kill = 0;
     x = TILE_WIDTH*tx;
     y = TILE_HEIGHT*ty;
+    w = 5;
 
     switch(kind)
     case TILE_KIND_NORMAL:
@@ -637,22 +652,26 @@ Begin
 
     if(tx>0)
     if(leveldata.tiles[(tx-1)+ty*MAX_LEVEL_WIDTH].kind != TILE_KIND_NORMAL)
-        wall[walls++] = add_fixed_body(x,y,x,y+TILE_HEIGHT,3);
+        //draws[walls] = draw(1,140,15,0,x,y,x,y+TILE_HEIGHT);
+        wall[walls++] = add_fixed_body(x,y,x,y+TILE_HEIGHT,w);
     end end
 
     if(tx<leveldata.width-1)
     if(leveldata.tiles[(tx+1)+ty*MAX_LEVEL_WIDTH].kind != TILE_KIND_NORMAL)
-        wall[walls++] = add_fixed_body(x+TILE_WIDTH,y,x+TILE_WIDTH,y+TILE_HEIGHT,3);
+        //draws[walls] = draw(1,140,15,0,x+TILE_WIDTH,y,x+TILE_WIDTH,y+TILE_HEIGHT);
+        wall[walls++] = add_fixed_body(x+TILE_WIDTH,y,x+TILE_WIDTH,y+TILE_HEIGHT,w);
     end end
 
     if(ty>0)
     if(leveldata.tiles[tx+(ty-1)*MAX_LEVEL_WIDTH].kind != TILE_KIND_NORMAL)
-        wall[walls++] = add_fixed_body(x,y,x+TILE_WIDTH,y,3);
+        //draws[walls] = draw(1,140,15,0,x,y,x+TILE_WIDTH,y);
+        wall[walls++] = add_fixed_body(x,y,x+TILE_WIDTH,y,w);
     end end
 
     if(ty<leveldata.height-1)
     if(leveldata.tiles[tx+(ty+1)*MAX_LEVEL_WIDTH].kind != TILE_KIND_NORMAL)
-        wall[walls++] = add_fixed_body(x,y+TILE_HEIGHT,x+TILE_WIDTH,y+TILE_HEIGHT,3);
+        //draws[walls] = draw(1,140,15,0,x,y+TILE_HEIGHT,x+TILE_WIDTH,y+TILE_HEIGHT);
+        wall[walls++] = add_fixed_body(x,y+TILE_HEIGHT,x+TILE_WIDTH,y+TILE_HEIGHT,w);
     end end
 
     ctype = C_SCROLL;
@@ -663,6 +682,7 @@ Begin
 
     for(;walls--;)
         remove_fixed_body(wall[walls]);
+        //delete_draw(draws[walls]);
     end
 End
 
