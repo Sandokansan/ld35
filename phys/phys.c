@@ -98,6 +98,66 @@ void phy_wall_destroy(void) {
 	
 }
 
+
+
+void phy_body_create_box(void) {
+
+	int mass = getparm();
+	int h = getparm();
+	int w = getparm();
+	int pid = getparm();
+
+	// Add procbody to linked list
+	struct procbody *newb = (struct procbody*)div_malloc(sizeof(struct procbody));
+	newb->next = bodies;
+	newb->prev = NULL;
+
+	// The moment of inertia is like mass for rotation
+	// Use the cpMomentFor*() functions to help you approximate it.
+//	cpFloat radius = ((float)diameter)/2;//20*(proc(pid)->size*100)/10000;
+
+	cpVect points[] = {
+		cpv(-w/2,-h/2),
+		cpv(w/2,-h/2),
+		cpv(w/2,h/2),
+		cpv(-w/2,h/2)
+	};
+
+	cpFloat moment = cpMomentForPoly(mass, 4, points, cpvzero,0);
+
+/*
+ *  int num = 4;
+    CGPoint verts[] = {
+        cpv(-31.5f, 69.5f),
+        cpv(41.5f, 66.5f),
+        cpv(40.5f, -69.5f),
+        cpv(-55.5f, -70.5f)
+    };
+ 
+    float mass = 1.0;
+    float moment = cpMomentForPoly(mass, num, verts, CGPointZero);
+    * */
+    
+	// Setup procbody
+	newb->body = cpSpaceAddBody(space, cpBodyNew(mass, INFINITY));// : moment);cpBodyNew(mass, moment));
+	newb->procid = pid;
+	newb->changed=0;
+	cpBodySetPosition(newb->body, cpv( ((process *)&mem[pid])->x,((process *)&mem[pid])->y));
+
+	newb->shape = cpSpaceAddShape(space, cpBoxShapeNew(newb->body, (cpFloat)w/2, (cpFloat)h/2,0));
+	newb->shape->e = 0.75;
+
+	cpShapeSetFriction(newb->shape, 0.7);
+
+    // link it in
+	if(bodies) {
+		bodies->prev = newb;
+    }
+    bodies = newb;
+
+	retval(0);
+}
+
 void phy_body_create_circle(void) {
 
 	int mass = getparm();
@@ -135,7 +195,6 @@ void phy_body_create_circle(void) {
 }
 
 void phy_body_create_box_bottom(void) {
-	
 	int friction = getparm();
 	int elasticity = getparm();
 	int moment = getparm();
@@ -391,23 +450,14 @@ void phy_body_move(void) {
 }
 
 void phy_body_set_position(void) {
-	
-	int y = getparm();
-	int x = getparm();
-	int pid = getparm();
-
-	struct procbody *pbody=findbody(pid);
-
-	if(pbody!=NULL) {
-		cpBodySetPosition(pbody->body, cpv(x,y));
-		cpBodySetVelocity(pbody->body,cpv(0,0));
-		proc(pid)->x=x;
-		proc(pid)->y=y;
-	}
-
-	pbody->changed=1;
-	retval(0);
-	
+    int y = getparm();
+    int x = getparm();
+    int id = getparm();
+    struct procbody* body = findbody(id);
+    if(body) {
+        cpBodySetPosition(body->body, cpv(x,y));
+    }
+    retval(0);
 }
 
 void phy_body_apply_force_xy(void) {
@@ -434,6 +484,24 @@ void phy_body_get_speed(void) {
     } else {
         retval(0);
     }
+}
+
+void phy_setxy(void) {
+	int y = getparm();
+	int x = getparm();
+	int pid = getparm();
+
+	struct procbody *pbody=findbody(pid);
+
+	if(pbody!=NULL) {
+		cpBodySetPosition(pbody->body, cpv(x,y));
+		cpBodySetVelocity(pbody->body,cpv(0,0));
+		proc(pid)->x=x;
+		proc(pid)->y=y;
+	}
+
+	pbody->changed=1;
+	retval(0);
 }
 
 void phy_end(void) {
@@ -489,12 +557,13 @@ void __export divlibrary(LIBRARY_PARAMS)
 	COM_export("phy_init",phy_init,0);
 	
 	COM_export("phy_body_create_circle",phy_body_create_circle,3);
+	COM_export("phy_body_create_box",phy_body_create_box,4);
 	COM_export("phy_body_create_box_bottom",phy_body_create_box_bottom,7);
-	COM_export("phy_body_move",phy_body_move,3);
-	COM_export("phy_body_apply_force_xy",phy_body_apply_force_xy,3);
 	COM_export("phy_body_set_position",phy_body_set_position,3);
-
+	COM_export("phy_body_move",phy_body_move,3);
 	COM_export("phy_body_get_speed",phy_body_get_speed,1);
+	COM_export("phy_setxy",phy_setxy,3);
+	COM_export("phy_body_apply_force_xy",phy_body_apply_force_xy,3);
 
 	COM_export("phy_wall_create",phy_wall_create,5);
 	COM_export("phy_wall_destroy",phy_wall_destroy,1);
@@ -539,3 +608,4 @@ void __export divmain(COMMON_PARAMS)
 }
 
 void __export divend(COMMON_PARAMS) { }
+
